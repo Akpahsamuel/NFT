@@ -1,15 +1,15 @@
-module nft::suiGhana_nft {
+module nft::sui_nft {
     use sui::url::{Self, Url};
     use std::string;
     use sui::event;
     use sui::package;
     use sui::display;
 
-    /// SUIGHANA_NFT is a struct that represents a unique SUIGHANA NFT.
-    public struct SUIGHANA_NFT has drop {}
+    /// SUI_NFT is a struct that represents a unique SUI NFT.
+    public struct SUI_NFT has drop {}
 
-    /// SuiGhana_nft is a struct that represents an NFT object in the Sui blockchain.
-    public struct SuiGhana_nft has key, store {
+    /// Sui_nft is a struct that represents an NFT object in the Sui blockchain.
+    public struct Sui_nft has key, store {
         /// The unique identifier of the NFT.
         id: object::UID,
         /// The name of the NFT.
@@ -32,15 +32,15 @@ module nft::suiGhana_nft {
         name: string::String,
     }
 
-     /// Initializes the SUIGHANA NFT.
-     ///
-     /// This function initializes the SUIGHANA NFT by creating a new package and publishing it to the sender.
-     /// It also creates a new display object and publishes it to the sender.
-     ///
-     /// Args:
-     /// * `witness`: A SUIGHANA NFT.
-     /// * `ctx`: The transaction context.
-     fun init(witness: SUIGHANA_NFT, ctx: &mut TxContext) {
+     // Initializes the SUI NFT.
+     //
+     // This function initializes the SUI NFT by creating a new package and publishing it to the sender.
+     // It also creates a new display object and publishes it to the sender.
+     //
+     // Args:
+     // * `witness`: A SUI NFT.
+     // * `ctx`: The transaction context.
+     fun init(witness: SUI_NFT, ctx: &mut TxContext) {
         let publisher = package::claim(witness, ctx);
 
         let keys = vector[
@@ -56,10 +56,10 @@ module nft::suiGhana_nft {
             string::utf8(b"{description}"),
            // string::utf8(b"{url}"),
             string::utf8(b"{image_url}"),
-            string::utf8(b"SuiGhana")
+            string::utf8(b"Sui")
         ];
 
-        let mut display = display::new_with_fields<SuiGhana_nft>(
+        let mut display = display::new_with_fields<Sui_nft>(
             &publisher, 
             keys,
             values,
@@ -88,7 +88,7 @@ module nft::suiGhana_nft {
         image_url: vector<u8>,
         ctx: &mut tx_context::TxContext,
     ) {
-        let nft = SuiGhana_nft {
+        let nft = Sui_nft {
             id: object::new(ctx),
             name: string::utf8(name),
             description: string::utf8(description),
@@ -113,7 +113,7 @@ module nft::suiGhana_nft {
     /// * `nft`: The NFT object to be updated.
     /// * `new_description`: The new description of the NFT.
     public entry fun update_description(
-        nft: &mut SuiGhana_nft,
+        nft: &mut Sui_nft,
         new_description: vector<u8>,
     ) {
         nft.description = string::utf8(new_description);
@@ -123,8 +123,8 @@ module nft::suiGhana_nft {
     ///
     /// Args:
     /// * `nft`: The NFT object to be burned.
-    public entry fun burn(nft: SuiGhana_nft) {
-        let SuiGhana_nft { id, name: _, description: _,  image_url: _ } = nft;
+    public entry fun burn(nft: Sui_nft) {
+        let Sui_nft { id, name: _, description: _,  image_url: _ } = nft;
         object::delete(id);
     }
 }
