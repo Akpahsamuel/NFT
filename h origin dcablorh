@@ -1,0 +1,7 @@
+[33m53f450f[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mdcablorh[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/dcablorh[m[33m, [m[1;31morigin/HEAD[m[33m, [m[1;32mmain[m[33m)[m changed suighananft to sui_nft
+[33m6889408[m nft contract
+[33me36ff8e[m Merge pull request #5 from Akpahsamuel/feature/slush-connection
+[33m71572b5[m[33m ([m[1;31morigin/feature/slush-connection[m[33m)[m SlushConnection
+[33m8977af5[m Merge pull request #3 from Akpahsamuel/frontend-setup
+[33m1bc9641[m[33m ([m[1;31morigin/frontend-setup[m[33m)[m Add frontend template using Vite, React, and Sui SDK
+[33mf97b775[m Created NFT
