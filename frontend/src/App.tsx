@@ -7,6 +7,7 @@ import {
 } from "@mysten/dapp-kit";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import "@mysten/dapp-kit/dist/index.css";
+import SuiNFTMinter from "./pages/main/Home/Home";
 
 const { networkConfig } = createNetworkConfig({
   devnet: { url: "https://fullnode.devnet.sui.io" },
@@ -27,10 +28,7 @@ export default function App() {
             name: 'Sui dApp Starter',  // Your dApp name
           }}
         >
-          <div style={{ padding: 40 }}>
-            <h1>Sui dApp Starter</h1>
-            <ConnectButton />
-          </div>
+          <SuiNFTMinter />
         </WalletProvider>
       </QueryClientProvider>
     </SuiClientProvider>

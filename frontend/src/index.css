@@ -1,68 +1,81 @@
-:root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+@import url("https://fonts.googleapis.com/css2?family=Raleway:ital,wght@0,100..900;1,100..900&display=swap");
+@import "tailwindcss";
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+@layer base {
+  body {
+    font-family: "Raleway", sans-serif !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background-color: rgb(30 58 138);
 
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
-}
-
-body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
-}
-
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
-}
-
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
   }
-  a:hover {
-    color: #747bff;
+  body.dark {
+    background-color: rgb(30 58 138);
   }
-  button {
-    background-color: #f9f9f9;
+}
+
+@layer components {
+  .colored-btn {
+    background-color: #006fee;
+    padding: 0.75rem 1.25rem;
+    border-radius: 1rem;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    align-items: center;
   }
+  .colored-btn:hover {
+    opacity: 0.8;
+  }
+  
+  .shadow-btn {
+    color: #006fee;
+    padding: 0.75rem 1.25rem;
+    border-radius: 1rem;
+    background-color: rgba(0, 111, 238, 0.2);
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s;
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    align-items: center;
+  }
+  .shadow-btn:hover {
+    opacity: 0.8;
+  }
+  
+  .gradient-text {
+    background: linear-gradient(to right, #006fee, #6020A0);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  
+  .input-style {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    border: 1px solid #d1d5db;
+    margin-top: 0.5rem;
+  }
+  .input-style:focus {
+    outline: none;
+    border-color: #6020A0;
+  }
+}
+
+.container {
+  width: 95%;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+button:active {
+  transform: scale(0.95);
 }
