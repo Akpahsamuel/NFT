@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { Upload, Wallet, Sparkles, Image, FileText, Trash2, Edit3 } from 'lucide-react';
-import { ConnectButton, useCurrentAccount, useDisconnectWallet } from '@mysten/dapp-kit';
+import React, { useState, useEffect } from 'react';
+import { Upload, Wallet, Sparkles, Image, FileText, Trash2, Edit3, RefreshCw } from 'lucide-react';
+import { ConnectButton, useCurrentAccount, useDisconnectWallet, useSuiClient, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
+import { Transaction } from '@mysten/sui/transactions';
 
 interface NFT {
   id: string;
@@ -14,6 +15,11 @@ interface NFT {
 const SuiNFTMinter: React.FC = () => {
   const currentAccount = useCurrentAccount();
   const { mutate: disconnect } = useDisconnectWallet();
+  const suiClient = useSuiClient();
+  const { mutate: signAndExecute } = useSignAndExecuteTransaction();
+  
+  // Contract configuration
+  const NFT_PACKAGE_ID = "0x19316c9f127b410b035f3e9f4b6e9d634701fa3c8da409ff799562906a6d5533";
   
   const [formData, setFormData] = useState({
     name: '',
@@ -23,9 +29,61 @@ const SuiNFTMinter: React.FC = () => {
   
   const [mintedNFTs, setMintedNFTs] = useState<NFT[]>([]);
   const [isMinting, setIsMinting] = useState(false);
+  const [isLoadingNFTs, setIsLoadingNFTs] = useState(false);
   const [activeTab, setActiveTab] = useState<'mint' | 'collection'>('mint');
   const [editingNFT, setEditingNFT] = useState<string | null>(null);
   const [newDescription, setNewDescription] = useState('');
+
+  // Fetch user's NFTs from the blockchain
+  const fetchUserNFTs = async () => {
+    if (!currentAccount || !suiClient) return;
+    
+    setIsLoadingNFTs(true);
+    try {
+      // Get all objects owned by the user
+      const objects = await suiClient.getOwnedObjects({
+        owner: currentAccount.address,
+        filter: {
+          StructType: `${NFT_PACKAGE_ID}::sui_nft::Sui_nft`
+        },
+        options: {
+          showDisplay: true,
+          showContent: true,
+        }
+      });
+
+      const nfts: NFT[] = [];
+      
+      for (const obj of objects.data) {
+        if (obj.data?.content && 'fields' in obj.data.content) {
+          const fields = obj.data.content.fields as any;
+          nfts.push({
+            id: obj.data.objectId,
+            name: fields.name || 'Unknown',
+            description: fields.description || 'No description',
+            image_url: fields.image_url || '',
+            creator: currentAccount.address,
+            timestamp: new Date() // We don't have timestamp from contract, using current date
+          });
+        }
+      }
+      
+      setMintedNFTs(nfts);
+    } catch (error) {
+      console.error('Failed to fetch NFTs:', error);
+    } finally {
+      setIsLoadingNFTs(false);
+    }
+  };
+
+  // Load NFTs when wallet connects
+  useEffect(() => {
+    if (currentAccount) {
+      fetchUserNFTs();
+    } else {
+      setMintedNFTs([]);
+    }
+  }, [currentAccount?.address]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -48,39 +106,148 @@ const SuiNFTMinter: React.FC = () => {
 
     setIsMinting(true);
     
-    // Simulate minting process
-    setTimeout(() => {
-      const newNFT: NFT = {
-        id: `nft_${Date.now()}`,
-        name: formData.name,
-        description: formData.description,
-        image_url: formData.image_url,
-        creator: currentAccount.address,
-        timestamp: new Date()
-      };
+    try {
+      // Create transaction for minting NFT
+      const tx = new Transaction();
       
-      setMintedNFTs(prev => [newNFT, ...prev]);
-      setFormData({ name: '', description: '', image_url: '' });
+      // Call the mint function from the smart contract
+      tx.moveCall({
+        target: `${NFT_PACKAGE_ID}::sui_nft::mint`,
+        arguments: [
+          tx.pure.string(formData.name),
+          tx.pure.string(formData.description),
+          tx.pure.string(formData.image_url),
+        ],
+      });
+
+      // Sign and execute the transaction
+      signAndExecute(
+        {
+          transaction: tx,
+        },
+        {
+          onSuccess: (result) => {
+            console.log('Minting successful:', result);
+            
+            // Refresh NFTs from blockchain
+            fetchUserNFTs();
+            
+            setFormData({ name: '', description: '', image_url: '' });
+            setIsMinting(false);
+            setActiveTab('collection');
+            
+            alert('NFT minted successfully!');
+          },
+          onError: (error) => {
+            console.error('Minting failed:', error);
+            setIsMinting(false);
+            alert(`Minting failed: ${error.message}`);
+          },
+        }
+      );
+    } catch (error) {
+      console.error('Transaction preparation failed:', error);
       setIsMinting(false);
-      setActiveTab('collection');
-    }, 2000);
+      alert(`Failed to prepare transaction: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
-  const handleUpdateDescription = (nftId: string) => {
-    setMintedNFTs(prev => 
-      prev.map(nft => 
-        nft.id === nftId 
-          ? { ...nft, description: newDescription }
-          : nft
-      )
-    );
-    setEditingNFT(null);
-    setNewDescription('');
+  const handleUpdateDescription = async (nftId: string) => {
+    if (!currentAccount) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+      
+      // Call update_description function with actual NFT object
+      tx.moveCall({
+        target: `${NFT_PACKAGE_ID}::sui_nft::update_description`,
+        arguments: [
+          tx.object(nftId), // Use actual NFT object ID
+          tx.pure.string(newDescription),
+        ],
+      });
+
+      signAndExecute(
+        {
+          transaction: tx,
+        },
+        {
+          onSuccess: (result) => {
+            console.log('Update successful:', result);
+            
+            // Update local state
+            setMintedNFTs(prev => 
+              prev.map(nft => 
+                nft.id === nftId 
+                  ? { ...nft, description: newDescription }
+                  : nft
+              )
+            );
+            setEditingNFT(null);
+            setNewDescription('');
+            
+            alert('NFT description updated successfully!');
+          },
+          onError: (error) => {
+            console.error('Update failed:', error);
+            alert(`Update failed: ${error.message}`);
+          },
+        }
+      );
+       
+    } catch (error) {
+      console.error('Update failed:', error);
+      alert(`Update failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   };
 
-  const handleBurnNFT = (nftId: string) => {
-    if (window.confirm('Are you sure you want to burn this NFT? This action cannot be undone.')) {
-      setMintedNFTs(prev => prev.filter(nft => nft.id !== nftId));
+  const handleBurnNFT = async (nftId: string) => {
+    if (!currentAccount) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
+    if (!window.confirm('Are you sure you want to burn this NFT? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const tx = new Transaction();
+      
+      // Call burn function with actual NFT object
+      tx.moveCall({
+        target: `${NFT_PACKAGE_ID}::sui_nft::burn`,
+        arguments: [
+          tx.object(nftId), // Use actual NFT object ID
+        ],
+      });
+
+      signAndExecute(
+        {
+          transaction: tx,
+        },
+        {
+          onSuccess: (result) => {
+            console.log('Burn successful:', result);
+            
+            // Remove from local state
+            setMintedNFTs(prev => prev.filter(nft => nft.id !== nftId));
+            
+            alert('NFT burned successfully!');
+          },
+          onError: (error) => {
+            console.error('Burn failed:', error);
+            alert(`Burn failed: ${error.message}`);
+          },
+        }
+      );
+       
+    } catch (error) {
+      console.error('Burn failed:', error);
+      alert(`Burn failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -268,7 +435,25 @@ const SuiNFTMinter: React.FC = () => {
             {/* Collection Tab */}
             {activeTab === 'collection' && (
               <div className="max-w-6xl mx-auto">
-                {mintedNFTs.length === 0 ? (
+                {/* Refresh button */}
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-2xl font-bold text-white">My NFT Collection</h2>
+                  <button
+                    onClick={fetchUserNFTs}
+                    disabled={isLoadingNFTs}
+                    className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg transition-all duration-300 disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isLoadingNFTs ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </button>
+                </div>
+
+                {isLoadingNFTs ? (
+                  <div className="text-center py-16">
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-cyan-400 mx-auto mb-4"></div>
+                    <p className="text-gray-300">Loading your NFTs...</p>
+                  </div>
+                ) : mintedNFTs.length === 0 ? (
                   <div className="text-center py-16">
                     <Image className="w-16 h-16 text-gray-500 mx-auto mb-4" />
                     <h3 className="text-2xl font-bold text-gray-400 mb-2">No NFTs yet</h3>
