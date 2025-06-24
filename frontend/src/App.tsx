@@ -26,7 +26,7 @@ export default function App() {
         <WalletProvider
           autoConnect={true}
           slushWallet={{
-            name: 'Sui dApp Starter',  // Your dApp name
+            name: 'NFT Studio',  // dapp name
           }}
         >
           <SuiNFTMinter />
