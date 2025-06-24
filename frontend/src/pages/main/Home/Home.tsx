@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Upload, Wallet, Sparkles, Image, FileText, Trash2, Edit3 } from 'lucide-react';
+import { ConnectButton, useCurrentAccount, useDisconnectWallet } from '@mysten/dapp-kit';
 
 interface NFT {
   id: string;
@@ -11,6 +12,9 @@ interface NFT {
 }
 
 const SuiNFTMinter: React.FC = () => {
+  const currentAccount = useCurrentAccount();
+  const { mutate: disconnect } = useDisconnectWallet();
+  
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -18,7 +22,6 @@ const SuiNFTMinter: React.FC = () => {
   });
   
   const [mintedNFTs, setMintedNFTs] = useState<NFT[]>([]);
-  const [isWalletConnected, setIsWalletConnected] = useState(false);
   const [isMinting, setIsMinting] = useState(false);
   const [activeTab, setActiveTab] = useState<'mint' | 'collection'>('mint');
   const [editingNFT, setEditingNFT] = useState<string | null>(null);
@@ -38,6 +41,11 @@ const SuiNFTMinter: React.FC = () => {
       return;
     }
 
+    if (!currentAccount) {
+      alert('Please connect your wallet first');
+      return;
+    }
+
     setIsMinting(true);
     
     // Simulate minting process
@@ -47,7 +55,7 @@ const SuiNFTMinter: React.FC = () => {
         name: formData.name,
         description: formData.description,
         image_url: formData.image_url,
-        creator: 'Sui',
+        creator: currentAccount.address,
         timestamp: new Date()
       };
       
@@ -76,10 +84,6 @@ const SuiNFTMinter: React.FC = () => {
     }
   };
 
-  const connectWallet = () => {
-    setIsWalletConnected(true);
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
       {/* Background Effects */}
@@ -104,22 +108,35 @@ const SuiNFTMinter: React.FC = () => {
         </header>
 
         {/* Wallet Connection */}
-        {!isWalletConnected ? (
+        {!currentAccount ? (
           <div className="max-w-md mx-auto mb-12 flex justify-center">
             <div className="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-8 text-center">
               <Wallet className="w-16 h-16 text-cyan-400 mx-auto mb-4" />
               <h3 className="text-2xl font-bold text-white mb-4">Connect Your Wallet</h3>
               <p className="text-gray-300 mb-6">Connect your Sui wallet to start minting NFTs</p>
-              <button
-                onClick={connectWallet}
-                className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 text-white font-semibold py-3 px-6 rounded-xl transition-all duration-300 transform hover:scale-105"
-              >
-                Connect Wallet
-              </button>
+              <ConnectButton 
+                connectText="Connect Wallet"
+              />
             </div>
           </div>
         ) : (
           <>
+            {/* Wallet Info */}
+            <div className="max-w-md mx-auto mb-8 flex justify-center">
+              <div className="bg-white/10 backdrop-blur-lg rounded-2xl border border-white/20 p-4 text-center">
+                <p className="text-gray-300 text-sm mb-2">Connected Wallet</p>
+                <p className="text-white font-mono text-sm truncate mb-3">
+                  {currentAccount.address.slice(0, 8)}...{currentAccount.address.slice(-8)}
+                </p>
+                <button
+                  onClick={() => disconnect()}
+                  className="bg-red-500/20 hover:bg-red-500/30 text-red-400 font-semibold py-2 px-4 rounded-lg transition-all duration-300"
+                >
+                  Disconnect
+                </button>
+              </div>
+            </div>
+
             {/* Navigation Tabs */}
             <div className="flex justify-center mb-8">
               <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-2 border border-white/20">
