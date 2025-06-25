@@ -10,6 +10,7 @@ interface NFT {
   image_url: string;
   creator: string;
   timestamp: Date;
+  minting_time?: number; // Add minting time from contract (timestamp in milliseconds)
 }
 
 const SuiNFTMinter: React.FC = () => {
@@ -19,7 +20,7 @@ const SuiNFTMinter: React.FC = () => {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   
   // Contract configuration
-  const NFT_PACKAGE_ID = "0x19316c9f127b410b035f3e9f4b6e9d634701fa3c8da409ff799562906a6d5533";
+  const NFT_PACKAGE_ID = "0x2ab433cc38f868c40846a19a6ebcf495d5dfd8e84be9c2e837c07d431526b525";
   
   const [formData, setFormData] = useState({
     name: '',
@@ -55,15 +56,18 @@ const SuiNFTMinter: React.FC = () => {
       const nfts: NFT[] = [];
       
       for (const obj of objects.data) {
-        if (obj.data?.content && 'fields' in obj.data.content) {
+        if (obj.data?.content?.dataType === 'moveObject' && 'fields' in obj.data.content) {
           const fields = obj.data.content.fields as any;
+          const mintingTime = fields.minting_time ? Number(fields.minting_time) : Date.now();
+          
           nfts.push({
             id: obj.data.objectId,
             name: fields.name || 'Unknown',
             description: fields.description || 'No description',
             image_url: fields.image_url || '',
             creator: currentAccount.address,
-            timestamp: new Date() // We don't have timestamp from contract, using current date
+            timestamp: new Date(mintingTime), // Use actual minting time from contract
+            minting_time: mintingTime
           });
         }
       }
@@ -104,19 +108,41 @@ const SuiNFTMinter: React.FC = () => {
       return;
     }
 
+    // Validate argument sizes (Sui has a 16KB limit for pure arguments)
+    const nameBytes = new TextEncoder().encode(formData.name);
+    const descriptionBytes = new TextEncoder().encode(formData.description);
+    const imageUrlBytes = new TextEncoder().encode(formData.image_url);
+
+    if (nameBytes.length > 15000) {
+      alert('NFT name is too long. Please use a shorter name.');
+      return;
+    }
+
+    if (descriptionBytes.length > 15000) {
+      alert('Description is too long. Please use a shorter description.');
+      return;
+    }
+
+    if (imageUrlBytes.length > 15000) {
+      alert('Image URL is too long. Please use a shorter URL.');
+      return;
+    }
+
     setIsMinting(true);
     
     try {
       // Create transaction for minting NFT
       const tx = new Transaction();
       
-      // Call the mint function from the smart contract
+      // Call the mint function from the smart contract with clock parameter
+      // Use vector<u8> encoding for better handling of string data
       tx.moveCall({
         target: `${NFT_PACKAGE_ID}::sui_nft::mint`,
         arguments: [
-          tx.pure.string(formData.name),
-          tx.pure.string(formData.description),
-          tx.pure.string(formData.image_url),
+          tx.pure.vector('u8', nameBytes),
+          tx.pure.vector('u8', descriptionBytes),
+          tx.pure.vector('u8', imageUrlBytes),
+          tx.object('0x6'), // Clock object ID (shared object)
         ],
       });
 
@@ -158,6 +184,13 @@ const SuiNFTMinter: React.FC = () => {
       return;
     }
 
+    // Validate description size
+    const descriptionBytes = new TextEncoder().encode(newDescription);
+    if (descriptionBytes.length > 15000) {
+      alert('Description is too long. Please use a shorter description.');
+      return;
+    }
+
     try {
       const tx = new Transaction();
       
@@ -166,7 +199,7 @@ const SuiNFTMinter: React.FC = () => {
         target: `${NFT_PACKAGE_ID}::sui_nft::update_description`,
         arguments: [
           tx.object(nftId), // Use actual NFT object ID
-          tx.pure.string(newDescription),
+          tx.pure.vector('u8', descriptionBytes),
         ],
       });
 
@@ -342,9 +375,14 @@ const SuiNFTMinter: React.FC = () => {
                   <div className="space-y-6">
                     {/* NFT Name */}
                     <div>
-                      <label className="flex items-center text-sm font-medium text-gray-300 mb-2">
-                        <FileText className="w-4 h-4 mr-2" />
-                        NFT Name
+                      <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                        <div className="flex items-center">
+                          <FileText className="w-4 h-4 mr-2" />
+                          NFT Name
+                        </div>
+                        <span className={`text-xs ${formData.name.length > 100 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {formData.name.length}/200
+                        </span>
                       </label>
                       <input
                         type="text"
@@ -352,6 +390,7 @@ const SuiNFTMinter: React.FC = () => {
                         value={formData.name}
                         onChange={handleInputChange}
                         placeholder="Enter NFT name"
+                        maxLength={200}
                         className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300"
                         required
                       />
@@ -359,9 +398,14 @@ const SuiNFTMinter: React.FC = () => {
 
                     {/* NFT Description */}
                     <div>
-                      <label className="flex items-center text-sm font-medium text-gray-300 mb-2">
-                        <Edit3 className="w-4 h-4 mr-2" />
-                        Description
+                      <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                        <div className="flex items-center">
+                          <Edit3 className="w-4 h-4 mr-2" />
+                          Description
+                        </div>
+                        <span className={`text-xs ${formData.description.length > 1000 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {formData.description.length}/2000
+                        </span>
                       </label>
                       <textarea
                         name="description"
@@ -369,6 +413,7 @@ const SuiNFTMinter: React.FC = () => {
                         onChange={handleInputChange}
                         placeholder="Describe your NFT"
                         rows={4}
+                        maxLength={2000}
                         className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300 resize-none"
                         required
                       />
@@ -376,9 +421,14 @@ const SuiNFTMinter: React.FC = () => {
 
                     {/* Image URL */}
                     <div>
-                      <label className="flex items-center text-sm font-medium text-gray-300 mb-2">
-                        <Image className="w-4 h-4 mr-2" />
-                        Image URL
+                      <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                        <div className="flex items-center">
+                          <Image className="w-4 h-4 mr-2" />
+                          Image URL
+                        </div>
+                        <span className={`text-xs ${formData.image_url.length > 500 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {formData.image_url.length}/1000
+                        </span>
                       </label>
                       <input
                         type="url"
@@ -386,6 +436,7 @@ const SuiNFTMinter: React.FC = () => {
                         value={formData.image_url}
                         onChange={handleInputChange}
                         placeholder="https://example.com/image.jpg"
+                        maxLength={1000}
                         className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300"
                         required
                       />
