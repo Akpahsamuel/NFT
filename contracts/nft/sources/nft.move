@@ -4,6 +4,7 @@ module nft::sui_nft {
     use sui::event;
     use sui::package;
     use sui::display;
+    use sui::clock::{Self, Clock};
 
     /// SUI_NFT is a struct that represents a unique SUI NFT.
     public struct SUI_NFT has drop {}
@@ -20,6 +21,8 @@ module nft::sui_nft {
        // url: Url,
         /// The URL of the image associated with the NFT.
         image_url: Url,
+        /// The timestamp when the NFT was minted (in milliseconds).
+        minting_time: u64,
     }
 
     /// Mintnft_event is a struct that represents an event emitted when an NFT is minted.
@@ -30,6 +33,8 @@ module nft::sui_nft {
         creator: address,
         /// The name of the NFT.
         name: string::String,
+        /// The timestamp when the NFT was minted.
+        minting_time: u64,
     }
 
      // Initializes the SUI NFT.
@@ -48,7 +53,8 @@ module nft::sui_nft {
             string::utf8(b"description"),
           //  string::utf8(b"url"),
             string::utf8(b"image_url"),
-            string::utf8(b"creator")
+            string::utf8(b"creator"),
+            string::utf8(b"minting_time")
         ];
 
         let values = vector[
@@ -56,7 +62,8 @@ module nft::sui_nft {
             string::utf8(b"{description}"),
            // string::utf8(b"{url}"),
             string::utf8(b"{image_url}"),
-            string::utf8(b"Sui")
+            string::utf8(b"Sui"),
+            string::utf8(b"{minting_time}")
         ];
 
         let mut display = display::new_with_fields<Sui_nft>(
@@ -79,21 +86,26 @@ module nft::sui_nft {
     /// Args:
     /// * `name`: The name of the NFT.
     /// * `description`: A short description of the NFT.
-    /// * `url`: The URL of the image associated with the NFT.
+    /// * `image_url`: The URL of the image associated with the NFT.
+    /// * `clock`: The clock object to get the current timestamp.
     /// * `ctx`: The transaction context.
     public entry fun mint(
         name: vector<u8>,
         description: vector<u8>,
        // url: vector<u8>,
         image_url: vector<u8>,
+        clock: &Clock,
         ctx: &mut tx_context::TxContext,
     ) {
+        let current_time = clock::timestamp_ms(clock);
+        
         let nft = Sui_nft {
             id: object::new(ctx),
             name: string::utf8(name),
             description: string::utf8(description),
           //  url: url::new_unsafe_from_bytes(url),
             image_url: url::new_unsafe_from_bytes(image_url),
+            minting_time: current_time,
         };
 
         let sender = tx_context::sender(ctx);
@@ -102,6 +114,7 @@ module nft::sui_nft {
             object_id: object::uid_to_inner(&nft.id),
             creator: sender,
             name: nft.name,
+            minting_time: current_time,
         });
 
         transfer::public_transfer(nft, sender);
@@ -124,7 +137,18 @@ module nft::sui_nft {
     /// Args:
     /// * `nft`: The NFT object to be burned.
     public entry fun burn(nft: Sui_nft) {
-        let Sui_nft { id, name: _, description: _,  image_url: _ } = nft;
+        let Sui_nft { id, name: _, description: _, image_url: _, minting_time: _ } = nft;
         object::delete(id);
+    }
+
+    /// Gets the minting time of an NFT.
+    ///
+    /// Args:
+    /// * `nft`: The NFT object to query.
+    /// 
+    /// Returns:
+    /// * The minting timestamp in milliseconds.
+    public fun get_minting_time(nft: &Sui_nft): u64 {
+        nft.minting_time
     }
 }

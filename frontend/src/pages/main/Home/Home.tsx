@@ -10,6 +10,7 @@ interface NFT {
   image_url: string;
   creator: string;
   timestamp: Date;
+  minting_time?: number; // Add minting time from contract (timestamp in milliseconds)
 }
 
 const SuiNFTMinter: React.FC = () => {
@@ -55,15 +56,18 @@ const SuiNFTMinter: React.FC = () => {
       const nfts: NFT[] = [];
       
       for (const obj of objects.data) {
-        if (obj.data?.content && 'fields' in obj.data.content) {
+        if (obj.data?.content?.dataType === 'moveObject' && 'fields' in obj.data.content) {
           const fields = obj.data.content.fields as any;
+          const mintingTime = fields.minting_time ? Number(fields.minting_time) : Date.now();
+          
           nfts.push({
             id: obj.data.objectId,
             name: fields.name || 'Unknown',
             description: fields.description || 'No description',
             image_url: fields.image_url || '',
             creator: currentAccount.address,
-            timestamp: new Date() // We don't have timestamp from contract, using current date
+            timestamp: new Date(mintingTime), // Use actual minting time from contract
+            minting_time: mintingTime
           });
         }
       }
@@ -110,13 +114,14 @@ const SuiNFTMinter: React.FC = () => {
       // Create transaction for minting NFT
       const tx = new Transaction();
       
-      // Call the mint function from the smart contract
+      // Call the mint function from the smart contract with clock parameter
       tx.moveCall({
         target: `${NFT_PACKAGE_ID}::sui_nft::mint`,
         arguments: [
           tx.pure.string(formData.name),
           tx.pure.string(formData.description),
           tx.pure.string(formData.image_url),
+          tx.object('0x6'), // Clock object ID (shared object)
         ],
       });
 
