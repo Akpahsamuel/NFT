@@ -89,13 +89,24 @@ export class WalrusService {
 
   /**
    * Fetch content from URL and upload to Walrus
+   * Note: This method may fail due to CORS restrictions when fetching from external URLs
    */
   static async uploadFromUrl(url: string): Promise<WalrusBlob> {
     try {
-      // Fetch the content from the URL
+      // First, check if this is already a Walrus URL
+      if (this.isWalrusUrl(url)) {
+        throw new Error('URL is already stored on Walrus. No need to re-upload.');
+      }
+
+      // Try to fetch the content from the URL
+      // Note: This will fail for most external URLs due to CORS restrictions
       const response = await axios.get(url, {
         responseType: 'arraybuffer', // Get raw binary data
         timeout: 30000, // 30 second timeout
+        // Add headers to potentially help with CORS
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; Walrus-NFT-App)',
+        },
       });
 
       // Upload raw data to Walrus
@@ -126,6 +137,29 @@ export class WalrusService {
     } catch (error) {
       console.error('Failed to upload URL to Walrus:', error);
       if (axios.isAxiosError(error)) {
+        // Handle specific CORS and network errors
+        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          throw new Error(
+            'CORS Error: Cannot fetch content from this URL due to browser security restrictions. ' +
+            'Please either:\n' +
+            '1. Download the image and upload it directly as a file, or\n' +
+            '2. Use the URL directly without Walrus storage\n' +
+            '3. Ensure the URL allows cross-origin requests'
+          );
+        }
+        if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+          throw new Error('Timeout: The URL took too long to respond. Please try a different image or upload directly.');
+        }
+        if (error.response?.status === 403) {
+          throw new Error('Access denied: The URL requires authentication or blocks automated access.');
+        }
+        if (error.response?.status === 404) {
+          throw new Error('Not found: The URL does not exist or the image has been removed.');
+        }
+        if (error.response && error.response.status >= 500) {
+          throw new Error('Server error: The URL\'s server is experiencing issues. Please try again later.');
+        }
+        
         const message = error.response?.data?.message || error.message;
         throw new Error(`Failed to fetch and upload URL: ${message}`);
       }
@@ -252,6 +286,96 @@ export class WalrusService {
    */
   static isWalrusUrl(url: string): boolean {
     return url.includes(WALRUS_AGGREGATOR_URL) || url.includes('walrus');
+  }
+
+  /**
+   * Validate and provide guidance for URL uploads
+   * Returns an object with validation result and suggestions
+   */
+  static validateUrlForUpload(url: string): { isValid: boolean; message: string; suggestions: string[] } {
+    try {
+      const parsedUrl = new URL(url);
+      
+      // Check if it's already a Walrus URL
+      if (this.isWalrusUrl(url)) {
+        return {
+          isValid: false,
+          message: 'This URL is already stored on Walrus',
+          suggestions: ['Use this URL directly without re-uploading to Walrus']
+        };
+      }
+
+      // Check for common image CDNs that typically support CORS
+      const corsKnownDomains = [
+        'imgur.com',
+        'i.imgur.com',
+        'github.com',
+        'githubusercontent.com',
+        'unsplash.com',
+        'images.unsplash.com',
+        'pexels.com',
+        'images.pexels.com',
+        'wikimedia.org',
+        'upload.wikimedia.org'
+      ];
+
+      const domain = parsedUrl.hostname.toLowerCase();
+      const supportsCors = corsKnownDomains.some(knownDomain => 
+        domain.includes(knownDomain)
+      );
+
+      if (supportsCors) {
+        return {
+          isValid: true,
+          message: 'This URL should work for Walrus upload',
+          suggestions: []
+        };
+      }
+
+      // Check for common domains that typically block CORS
+      const blockedDomains = [
+        'instagram.com',
+        'facebook.com',
+        'twitter.com',
+        'x.com',
+        'tiktok.com',
+        'linkedin.com',
+        'pinterest.com'
+      ];
+
+      const isBlocked = blockedDomains.some(blockedDomain => 
+        domain.includes(blockedDomain)
+      );
+
+      if (isBlocked) {
+        return {
+          isValid: false,
+          message: 'This domain typically blocks cross-origin requests',
+          suggestions: [
+            'Right-click the image and "Save image as..." to download it',
+            'Then upload the downloaded file directly',
+            'Or use the URL directly without Walrus storage'
+          ]
+        };
+      }
+
+      // For unknown domains, provide general guidance
+      return {
+        isValid: true,
+        message: 'URL upload may work but could fail due to CORS restrictions',
+        suggestions: [
+          'If upload fails, try downloading the image and uploading as a file',
+          'Or use the URL directly without Walrus storage'
+        ]
+      };
+
+    } catch (error) {
+      return {
+        isValid: false,
+        message: 'Invalid URL format',
+        suggestions: ['Please enter a valid URL starting with http:// or https://']
+      };
+    }
   }
 
   /**

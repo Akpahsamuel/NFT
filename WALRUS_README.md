@@ -155,6 +155,27 @@ public struct Sui_nft has key, store {
 - **Cause**: Walrus certification takes time
 - **Solution**: Wait for automatic certification (usually < 30 seconds).
 
+### CORS Issues with URL Uploads
+
+When uploading from URLs, you may encounter CORS (Cross-Origin Resource Sharing) errors. This is a browser security feature that prevents websites from fetching content from other domains.
+
+#### ✅ URLs that typically work:
+- **Imgur**: `imgur.com`, `i.imgur.com`
+- **GitHub**: `github.com`, `githubusercontent.com`
+- **Unsplash**: `unsplash.com`, `images.unsplash.com`
+- **Pexels**: `pexels.com`, `images.pexels.com`
+- **Wikimedia**: `wikimedia.org`, `upload.wikimedia.org`
+
+#### ❌ URLs that typically don't work:
+- **Social Media**: Instagram, Facebook, Twitter/X, TikTok, LinkedIn, Pinterest
+- **Most private websites**: Personal blogs, company websites
+- **Image hosting with restrictions**: Some paid CDNs
+
+#### 🛠️ Workarounds for blocked URLs:
+1. **Download and Upload**: Right-click → "Save image as..." → Upload file directly
+2. **Use URL directly**: Don't enable "Store in Walrus" option
+3. **Use allowed domains**: Re-host images on CORS-friendly services like Imgur
+
 ### Debug Steps
 
 1. **Check Service Health**
@@ -163,14 +184,23 @@ public struct Sui_nft has key, store {
    console.log('Walrus service healthy:', isHealthy);
    ```
 
-2. **Monitor Upload Progress**
+2. **Validate URL before upload**
+   ```typescript
+   const validation = WalrusService.validateUrlForUpload(url);
+   console.log('URL validation:', validation);
+   if (!validation.isValid) {
+     console.log('Suggestions:', validation.suggestions);
+   }
+   ```
+
+3. **Monitor Upload Progress**
    ```typescript
    await WalrusService.waitForBlobCertification(blobId, (message) => {
      console.log('Progress:', message);
    });
    ```
 
-3. **Test Endpoints Manually**
+4. **Test Endpoints Manually**
    ```bash
    # Test publisher
    curl -I "https://publisher.walrus-01.tududes.com/v1/blobs?epochs=5" -X OPTIONS
