@@ -3,13 +3,15 @@ import {
   WalletProvider,
   SuiClientProvider,
   createNetworkConfig,
-  ConnectButton
 } from "@mysten/dapp-kit";
 import { QueryClientProvider, QueryClient } from "@tanstack/react-query";
 import "@mysten/dapp-kit/dist/index.css";
+import SuiNFTMinter from "./pages/main/Home/Home";
 
 const { networkConfig } = createNetworkConfig({
   devnet: { url: "https://fullnode.devnet.sui.io" },
+  testnet: { url: "https://fullnode.testnet.sui.io" },
+  mainnet: { url: "https://fullnode.mainnet.sui.io" },
 });
 
 const queryClient = new QueryClient();
@@ -24,13 +26,10 @@ export default function App() {
         <WalletProvider
           autoConnect={true}
           slushWallet={{
-            name: 'Sui dApp Starter',  // Your dApp name
+            name: 'NFT Studio',  // dapp name
           }}
         >
-          <div style={{ padding: 40 }}>
-            <h1>Sui dApp Starter</h1>
-            <ConnectButton />
-          </div>
+          <SuiNFTMinter />
         </WalletProvider>
       </QueryClientProvider>
     </SuiClientProvider>
