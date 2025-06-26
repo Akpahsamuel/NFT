@@ -381,15 +381,15 @@ export class WalrusService {
   /**
    * Extract filename from URL
    */
-  private static getFilenameFromUrl(url: string): string {
-    try {
-      const pathname = new URL(url).pathname;
-      const filename = pathname.split('/').pop();
-      return filename || 'file';
-    } catch {
-      return 'file';
-    }
-  }
+  // private static getFilenameFromUrl(url: string): string {
+  //   try {
+  //     const pathname = new URL(url).pathname;
+  //     const filename = pathname.split('/').pop();
+  //     return filename || 'file';
+  //   } catch {
+  //     return 'file';
+  //   }
+  // }
 
   /**
    * Check if the Walrus service is available
