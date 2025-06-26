@@ -112,7 +112,8 @@ const SuiNFTMinter: React.FC = () => {
     setUploadProgress('Uploading to Walrus...');
     
     try {
-      const blob = await WalrusService.uploadFile(file);
+      // Pass the user's address to ensure blob ownership
+      const blob = await WalrusService.uploadFile(file, currentAccount?.address);
       setWalrusBlob(blob);
       setFormData(prev => ({
         ...prev,
@@ -160,7 +161,8 @@ const SuiNFTMinter: React.FC = () => {
     setUploadProgress('Fetching from URL and uploading to Walrus...');
     
     try {
-      const blob = await WalrusService.uploadFromUrl(formData.image_url);
+      // Pass the user's address to ensure blob ownership
+      const blob = await WalrusService.uploadFromUrl(formData.image_url, currentAccount?.address);
       setWalrusBlob(blob);
       setFormData(prev => ({
         ...prev,
