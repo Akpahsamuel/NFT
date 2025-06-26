@@ -5,7 +5,7 @@ module nft::sui_nft {
     use sui::package;
     use sui::display;
     use sui::clock::{Self, Clock};
-    use std::option::{Self, Option};
+
 
     /// SUI_NFT is a struct that represents a unique SUI NFT.
     public struct SUI_NFT has drop {}
