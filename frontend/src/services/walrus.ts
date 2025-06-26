@@ -30,14 +30,22 @@ export interface WalrusBlob {
 export class WalrusService {
   /**
    * Upload a file directly to Walrus
+   * @param file The file to upload
+   * @param userAddress The user's Sui address to own the resulting blob object
    */
-  static async uploadFile(file: File): Promise<WalrusBlob> {
+  static async uploadFile(file: File, userAddress?: string): Promise<WalrusBlob> {
     try {
       // Convert file to raw binary data
       const fileData = await file.arrayBuffer();
       
+      // Construct URL with send_object_to parameter if userAddress is provided
+      let uploadUrl = `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=5`;
+      if (userAddress) {
+        uploadUrl += `&send_object_to=${userAddress}`;
+      }
+      
       const response = await axios.put<WalrusUploadResponse>(
-        `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=5`,
+        uploadUrl,
         fileData,
         {
           headers: {
@@ -90,8 +98,10 @@ export class WalrusService {
   /**
    * Fetch content from URL and upload to Walrus
    * Note: This method may fail due to CORS restrictions when fetching from external URLs
+   * @param url The URL to fetch and upload
+   * @param userAddress The user's Sui address to own the resulting blob object
    */
-  static async uploadFromUrl(url: string): Promise<WalrusBlob> {
+  static async uploadFromUrl(url: string, userAddress?: string): Promise<WalrusBlob> {
     try {
       // First, check if this is already a Walrus URL
       if (this.isWalrusUrl(url)) {
@@ -109,9 +119,15 @@ export class WalrusService {
         },
       });
 
+      // Construct URL with send_object_to parameter if userAddress is provided
+      let uploadUrl = `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=5`;
+      if (userAddress) {
+        uploadUrl += `&send_object_to=${userAddress}`;
+      }
+
       // Upload raw data to Walrus
       const walrusResponse = await axios.put<WalrusUploadResponse>(
-        `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=5`,
+        uploadUrl,
         response.data,
         {
           headers: {
@@ -242,15 +258,23 @@ export class WalrusService {
 
   /**
    * Upload JSON metadata to Walrus
+   * @param metadata The metadata object to upload
+   * @param userAddress The user's Sui address to own the resulting blob object
    */
-  static async uploadMetadata(metadata: any): Promise<WalrusBlob> {
+  static async uploadMetadata(metadata: any, userAddress?: string): Promise<WalrusBlob> {
     const jsonData = JSON.stringify(metadata, null, 2);
     const encoder = new TextEncoder();
     const binaryData = encoder.encode(jsonData);
     
     try {
+      // Construct URL with send_object_to parameter if userAddress is provided
+      let uploadUrl = `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=5`;
+      if (userAddress) {
+        uploadUrl += `&send_object_to=${userAddress}`;
+      }
+
       const response = await axios.put<WalrusUploadResponse>(
-        `${WALRUS_PUBLISHER_URL}/v1/blobs?epochs=5`,
+        uploadUrl,
         binaryData,
         {
           headers: {

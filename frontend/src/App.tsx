@@ -20,7 +20,7 @@ export default function App() {
   return (
     <SuiClientProvider 
       networks={networkConfig} 
-      defaultNetwork="testnet"
+      defaultNetwork="devnet"
     >
       <QueryClientProvider client={queryClient}>
         <WalletProvider

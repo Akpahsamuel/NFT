@@ -5,6 +5,7 @@ This project integrates [Walrus](https://docs.wal.app/), a decentralized storage
 ## 🌟 Features
 
 - **Decentralized Storage**: Store NFT images on Walrus for true decentralization
+- **User-Owned Blobs**: Ensure blob objects are owned by the user's Sui address, not the publisher
 - **Dual Input Methods**: Upload files directly or provide URLs with optional Walrus backup
 - **Automatic Certification**: Wait for blob certification with real-time progress updates
 - **Fallback Endpoints**: Multiple aggregator endpoints for high availability
@@ -19,9 +20,28 @@ This project integrates [Walrus](https://docs.wal.app/), a decentralized storage
 │                 │    │                 │    │                 │
 │ • File Upload   │───▶│ • Upload Files  │───▶│ • Publisher     │
 │ • URL Input     │    │ • Check Status  │    │ • Aggregator    │
-│ • Progress UI   │◀───│ • Get Blob URLs │◀───│ • Storage Nodes │
+│ • User Address  │    │ • Blob Ownership│    │ • Storage Nodes │
+│ • Progress UI   │◀───│ • Get Blob URLs │◀───│ • User-Owned    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
+
+## 🔑 Blob Ownership
+
+This implementation ensures that **all Walrus blob objects are owned by the user's Sui address**, not by the publisher or any default address. This is achieved by:
+
+1. **Automatic Address Detection**: The application automatically uses the connected wallet's address
+2. **send_object_to Parameter**: All upload requests include `&send_object_to=<user_address>` 
+3. **User Control**: Users have full ownership and control over their blob objects on Sui
+4. **Lifecycle Management**: Users can manage blob lifecycle, extend storage, or delete blobs
+
+### How It Works
+
+When uploading to Walrus, the URL structure is:
+```
+PUT /v1/blobs?epochs=5&send_object_to=0x<USER_SUI_ADDRESS>
+```
+
+This ensures the resulting `Blob` object on Sui is transferred to the user's address instead of remaining with the publisher's sub-wallet.
 
 ## 🚀 Quick Start
 
@@ -97,7 +117,8 @@ To modify Walrus settings, edit `frontend/src/services/walrus.ts`:
 import { WalrusService } from './services/walrus';
 
 const file = event.target.files[0];
-const walrusBlob = await WalrusService.uploadFile(file);
+const userAddress = '0x1234...'; // User's Sui address
+const walrusBlob = await WalrusService.uploadFile(file, userAddress);
 console.log('Blob ID:', walrusBlob.blobId);
 console.log('Walrus URL:', walrusBlob.walrusUrl);
 ```
@@ -106,9 +127,19 @@ console.log('Walrus URL:', walrusBlob.walrusUrl);
 
 ```typescript
 const url = 'https://example.com/image.jpg';
-const walrusBlob = await WalrusService.uploadFromUrl(url);
+const userAddress = '0x1234...'; // User's Sui address
+const walrusBlob = await WalrusService.uploadFromUrl(url, userAddress);
 console.log('Original URL:', walrusBlob.originalUrl);
 console.log('Walrus URL:', walrusBlob.walrusUrl);
+```
+
+#### Upload Metadata
+
+```typescript
+const metadata = { name: "My NFT", description: "...", image: "..." };
+const userAddress = '0x1234...'; // User's Sui address
+const walrusBlob = await WalrusService.uploadMetadata(metadata, userAddress);
+console.log('Metadata Blob ID:', walrusBlob.blobId);
 ```
 
 #### Check Blob Availability
@@ -246,8 +277,9 @@ The UI provides visual feedback for Walrus integration:
 ```typescript
 // Upload multiple files
 const files = Array.from(fileInput.files);
+const userAddress = '0x1234...'; // User's Sui address
 const uploads = await Promise.all(
-  files.map(file => WalrusService.uploadFile(file))
+  files.map(file => WalrusService.uploadFile(file, userAddress))
 );
 ```
 
@@ -261,7 +293,8 @@ const metadata = {
   image: walrusImageUrl,
   attributes: [...]
 };
-const metadataBlob = await WalrusService.uploadMetadata(metadata);
+const userAddress = '0x1234...'; // User's Sui address
+const metadataBlob = await WalrusService.uploadMetadata(metadata, userAddress);
 ```
 
 ## 📚 Resources
