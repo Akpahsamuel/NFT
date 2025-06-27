@@ -183,6 +183,7 @@ module nft::sui_nft {
         nft.minting_time
     }
 
+
     /// Gets the Walrus blob ID if it exists.
     ///
     /// Args:
