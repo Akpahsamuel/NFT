@@ -4,6 +4,8 @@ module nft::sui_nft {
     use sui::event;
     use sui::package;
     use sui::display;
+    use sui::clock::{Self, Clock};
+
 
     /// SUI_NFT is a struct that represents a unique SUI NFT.
     public struct SUI_NFT has drop {}
@@ -16,10 +18,12 @@ module nft::sui_nft {
         name: string::String, 
         /// A short description of the NFT.
         description: string::String,
-       // /// The URL of the NFT.
-       // url: Url,
         /// The URL of the image associated with the NFT.
         image_url: Url,
+        /// Walrus blob ID for the image (optional)
+        walrus_blob_id: Option<string::String>,
+        /// The timestamp when the NFT was minted (in milliseconds).
+        minting_time: u64,
     }
 
     /// Mintnft_event is a struct that represents an event emitted when an NFT is minted.
@@ -30,6 +34,10 @@ module nft::sui_nft {
         creator: address,
         /// The name of the NFT.
         name: string::String,
+        /// The timestamp when the NFT was minted.
+        minting_time: u64,
+        /// Optional Walrus blob ID
+        walrus_blob_id: Option<string::String>,
     }
 
      // Initializes the SUI NFT.
@@ -46,17 +54,19 @@ module nft::sui_nft {
         let keys = vector[
             string::utf8(b"name"),
             string::utf8(b"description"),
-          //  string::utf8(b"url"),
             string::utf8(b"image_url"),
-            string::utf8(b"creator")
+            string::utf8(b"creator"),
+            string::utf8(b"minting_time"),
+            string::utf8(b"walrus_blob_id")
         ];
 
         let values = vector[
             string::utf8(b"{name}"),
             string::utf8(b"{description}"),
-           // string::utf8(b"{url}"),
             string::utf8(b"{image_url}"),
-            string::utf8(b"Sui")
+            string::utf8(b"Sui"),
+            string::utf8(b"{minting_time}"),
+            string::utf8(b"{walrus_blob_id}")
         ];
 
         let mut display = display::new_with_fields<Sui_nft>(
@@ -79,21 +89,53 @@ module nft::sui_nft {
     /// Args:
     /// * `name`: The name of the NFT.
     /// * `description`: A short description of the NFT.
-    /// * `url`: The URL of the image associated with the NFT.
+    /// * `image_url`: The URL of the image associated with the NFT.
+    /// * `clock`: The clock object to get the current timestamp.
     /// * `ctx`: The transaction context.
     public entry fun mint(
         name: vector<u8>,
         description: vector<u8>,
-       // url: vector<u8>,
         image_url: vector<u8>,
+        clock: &Clock,
         ctx: &mut tx_context::TxContext,
     ) {
+        mint_with_walrus(name, description, image_url, option::none(), clock, ctx);
+    }
+
+    /// Mints a new NFT object with optional Walrus blob ID.
+    ///
+    /// This function mints a new NFT object and transfers it to the sender.
+    ///
+    /// Args:
+    /// * `name`: The name of the NFT.
+    /// * `description`: A short description of the NFT.
+    /// * `image_url`: The URL of the image associated with the NFT.
+    /// * `walrus_blob_id`: Optional Walrus blob ID for decentralized storage.
+    /// * `clock`: The clock object to get the current timestamp.
+    /// * `ctx`: The transaction context.
+    public entry fun mint_with_walrus(
+        name: vector<u8>,
+        description: vector<u8>,
+        image_url: vector<u8>,
+        walrus_blob_id: Option<vector<u8>>,
+        clock: &Clock,
+        ctx: &mut tx_context::TxContext,
+    ) {
+        let current_time = clock::timestamp_ms(clock);
+        
+        let blob_id_option = if (option::is_some(&walrus_blob_id)) {
+            option::some(string::utf8(*option::borrow(&walrus_blob_id)))
+        } else {
+            option::none()
+        };
+        
         let nft = Sui_nft {
             id: object::new(ctx),
             name: string::utf8(name),
             description: string::utf8(description),
-          //  url: url::new_unsafe_from_bytes(url),
             image_url: url::new_unsafe_from_bytes(image_url),
+            walrus_blob_id: blob_id_option,
+            minting_time: current_time,
         };
 
         let sender = tx_context::sender(ctx);
@@ -102,6 +144,8 @@ module nft::sui_nft {
             object_id: object::uid_to_inner(&nft.id),
             creator: sender,
             name: nft.name,
+            minting_time: current_time,
+            walrus_blob_id: blob_id_option,
         });
 
         transfer::public_transfer(nft, sender);
@@ -124,7 +168,29 @@ module nft::sui_nft {
     /// Args:
     /// * `nft`: The NFT object to be burned.
     public entry fun burn(nft: Sui_nft) {
-        let Sui_nft { id, name: _, description: _,  image_url: _ } = nft;
+        let Sui_nft { id, name: _, description: _, image_url: _, walrus_blob_id: _, minting_time: _ } = nft;
         object::delete(id);
+    }
+
+    /// Gets the minting time of an NFT.
+    ///
+    /// Args:
+    /// * `nft`: The NFT object to query.
+    /// 
+    /// Returns:
+    /// * The minting timestamp in milliseconds.
+    public fun get_minting_time(nft: &Sui_nft): u64 {
+        nft.minting_time
+    }
+
+    /// Gets the Walrus blob ID if it exists.
+    ///
+    /// Args:
+    /// * `nft`: The NFT object to query.
+    /// 
+    /// Returns:
+    /// * The Walrus blob ID if it exists.
+    public fun get_walrus_blob_id(nft: &Sui_nft): Option<string::String> {
+        nft.walrus_blob_id
     }
 }

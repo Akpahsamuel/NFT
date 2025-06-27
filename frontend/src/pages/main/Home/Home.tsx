@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Upload, Wallet, Sparkles, Image, FileText, Trash2, Edit3, RefreshCw } from 'lucide-react';
+import { Upload, Wallet, Sparkles, Image, FileText, Trash2, Edit3, RefreshCw, Link, Cloud } from 'lucide-react';
 import { ConnectButton, useCurrentAccount, useDisconnectWallet, useSuiClient, useSignAndExecuteTransaction } from '@mysten/dapp-kit';
 import { Transaction } from '@mysten/sui/transactions';
+import { WalrusService, type WalrusBlob } from '../../../services/walrus';
 
 interface NFT {
   id: string;
@@ -10,7 +11,11 @@ interface NFT {
   image_url: string;
   creator: string;
   timestamp: Date;
+  minting_time?: number;
+  walrus_blob_id?: string;
 }
+
+type ImageInputMethod = 'file' | 'url';
 
 const SuiNFTMinter: React.FC = () => {
   const currentAccount = useCurrentAccount();
@@ -19,13 +24,18 @@ const SuiNFTMinter: React.FC = () => {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   
   // Contract configuration
-  const NFT_PACKAGE_ID = "0x19316c9f127b410b035f3e9f4b6e9d634701fa3c8da409ff799562906a6d5533";
+  const NFT_PACKAGE_ID = "0x435aaf7811d8e25962b1b3d822031c09ac5e3f5f2b1f99fd312dadd38cdd3cc7";
   
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     image_url: ''
   });
+  
+  const [imageInputMethod, setImageInputMethod] = useState<ImageInputMethod>('file');
+  const [walrusBlob, setWalrusBlob] = useState<WalrusBlob | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState('');
   
   const [mintedNFTs, setMintedNFTs] = useState<NFT[]>([]);
   const [isMinting, setIsMinting] = useState(false);
@@ -55,15 +65,19 @@ const SuiNFTMinter: React.FC = () => {
       const nfts: NFT[] = [];
       
       for (const obj of objects.data) {
-        if (obj.data?.content && 'fields' in obj.data.content) {
+        if (obj.data?.content?.dataType === 'moveObject' && 'fields' in obj.data.content) {
           const fields = obj.data.content.fields as any;
+          const mintingTime = fields.minting_time ? Number(fields.minting_time) : Date.now();
+          
           nfts.push({
             id: obj.data.objectId,
             name: fields.name || 'Unknown',
             description: fields.description || 'No description',
             image_url: fields.image_url || '',
             creator: currentAccount.address,
-            timestamp: new Date() // We don't have timestamp from contract, using current date
+            timestamp: new Date(mintingTime),
+            minting_time: mintingTime,
+            walrus_blob_id: fields.walrus_blob_id || undefined
           });
         }
       }
@@ -93,6 +107,102 @@ const SuiNFTMinter: React.FC = () => {
     }));
   };
 
+  const handleFileUpload = async (file: File) => {
+    setIsUploading(true);
+    setUploadProgress('Uploading to Walrus...');
+    
+    try {
+      // Pass the user's address to ensure blob ownership
+      const blob = await WalrusService.uploadFile(file, currentAccount?.address);
+      setWalrusBlob(blob);
+      setFormData(prev => ({
+        ...prev,
+        image_url: blob.walrusUrl
+      }));
+      
+      // Check blob certification with progress updates
+      setUploadProgress('Upload successful! Waiting for blob certification...');
+      
+      const isCertified = await WalrusService.waitForBlobCertification(
+        blob.blobId,
+        (message) => setUploadProgress(message)
+      );
+      
+      if (isCertified) {
+        setUploadProgress('File uploaded and certified successfully!');
+      } else {
+        setUploadProgress('File uploaded! Certification may take a few more moments.');
+      }
+      
+      setTimeout(() => setUploadProgress(''), 3000);
+    } catch (error) {
+      console.error('File upload failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to upload file to Walrus: ${errorMessage}`);
+      setUploadProgress('');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleUrlToWalrus = async () => {
+    if (!formData.image_url.trim()) {
+      alert('Please enter a valid URL');
+      return;
+    }
+
+    // Check if it's already a Walrus URL
+    if (WalrusService.isWalrusUrl(formData.image_url)) {
+      alert('This is already a Walrus URL');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadProgress('Fetching from URL and uploading to Walrus...');
+    
+    try {
+      // Pass the user's address to ensure blob ownership
+      const blob = await WalrusService.uploadFromUrl(formData.image_url, currentAccount?.address);
+      setWalrusBlob(blob);
+      setFormData(prev => ({
+        ...prev,
+        image_url: blob.walrusUrl
+      }));
+      
+      // Check blob certification with progress updates
+      setUploadProgress('Upload successful! Waiting for blob certification...');
+      
+      const isCertified = await WalrusService.waitForBlobCertification(
+        blob.blobId,
+        (message) => setUploadProgress(message)
+      );
+      
+      if (isCertified) {
+        setUploadProgress('URL content uploaded and certified successfully!');
+      } else {
+        setUploadProgress('URL content uploaded! Certification may take a few more moments.');
+      }
+      
+      setTimeout(() => setUploadProgress(''), 3000);
+    } catch (error) {
+      console.error('URL upload failed:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      alert(`Failed to upload URL to Walrus: ${errorMessage}`);
+      setUploadProgress('');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const resetImageInput = () => {
+    setWalrusBlob(null);
+    setFormData(prev => ({
+      ...prev,
+      image_url: ''
+    }));
+    setUploadProgress('');
+  };
+
   const handleMint = async () => {
     if (!formData.name || !formData.description || !formData.image_url) {
       alert('Please fill in all fields');
@@ -104,20 +214,53 @@ const SuiNFTMinter: React.FC = () => {
       return;
     }
 
+    // Validate argument sizes (Sui has a 16KB limit for pure arguments)
+    const nameBytes = new TextEncoder().encode(formData.name);
+    const descriptionBytes = new TextEncoder().encode(formData.description);
+    const imageUrlBytes = new TextEncoder().encode(formData.image_url);
+
+    if (nameBytes.length > 15000) {
+      alert('NFT name is too long. Please use a shorter name.');
+      return;
+    }
+
+    if (descriptionBytes.length > 15000) {
+      alert('Description is too long. Please use a shorter description.');
+      return;
+    }
+
+    if (imageUrlBytes.length > 15000) {
+      alert('Image URL is too long. Please use a shorter URL.');
+      return;
+    }
+
     setIsMinting(true);
     
     try {
       // Create transaction for minting NFT
       const tx = new Transaction();
       
-      // Call the mint function from the smart contract
+      // Prepare arguments
+      const args = [
+        tx.pure.vector('u8', nameBytes),
+        tx.pure.vector('u8', descriptionBytes),
+        tx.pure.vector('u8', imageUrlBytes),
+      ];
+
+      // Add Walrus blob ID if available
+      if (walrusBlob?.blobId) {
+        const blobIdBytes = new TextEncoder().encode(walrusBlob.blobId);
+        args.push(tx.pure.option('vector<u8>', Array.from(blobIdBytes)));
+      } else {
+        args.push(tx.pure.option('vector<u8>', null));
+      }
+
+      args.push(tx.object('0x6')); // Clock object ID (shared object)
+
+      // Call the mint_with_walrus function from the smart contract
       tx.moveCall({
-        target: `${NFT_PACKAGE_ID}::sui_nft::mint`,
-        arguments: [
-          tx.pure.string(formData.name),
-          tx.pure.string(formData.description),
-          tx.pure.string(formData.image_url),
-        ],
+        target: `${NFT_PACKAGE_ID}::sui_nft::mint_with_walrus`,
+        arguments: args,
       });
 
       // Sign and execute the transaction
@@ -132,7 +275,9 @@ const SuiNFTMinter: React.FC = () => {
             // Refresh NFTs from blockchain
             fetchUserNFTs();
             
+            // Reset form
             setFormData({ name: '', description: '', image_url: '' });
+            setWalrusBlob(null);
             setIsMinting(false);
             setActiveTab('collection');
             
@@ -158,6 +303,13 @@ const SuiNFTMinter: React.FC = () => {
       return;
     }
 
+    // Validate description size
+    const descriptionBytes = new TextEncoder().encode(newDescription);
+    if (descriptionBytes.length > 15000) {
+      alert('Description is too long. Please use a shorter description.');
+      return;
+    }
+
     try {
       const tx = new Transaction();
       
@@ -166,7 +318,7 @@ const SuiNFTMinter: React.FC = () => {
         target: `${NFT_PACKAGE_ID}::sui_nft::update_description`,
         arguments: [
           tx.object(nftId), // Use actual NFT object ID
-          tx.pure.string(newDescription),
+          tx.pure.vector('u8', descriptionBytes),
         ],
       });
 
@@ -270,7 +422,7 @@ const SuiNFTMinter: React.FC = () => {
             <Sparkles className="w-8 h-8 text-purple-400 ml-3" />
           </div>
           <p className="text-gray-300 text-lg max-w-2xl mx-auto">
-            Create, manage, and showcase your unique NFTs on the Sui blockchain
+            Create, manage, and showcase your unique NFTs on the Sui blockchain with Walrus decentralized storage
           </p>
         </header>
 
@@ -342,9 +494,14 @@ const SuiNFTMinter: React.FC = () => {
                   <div className="space-y-6">
                     {/* NFT Name */}
                     <div>
-                      <label className="flex items-center text-sm font-medium text-gray-300 mb-2">
-                        <FileText className="w-4 h-4 mr-2" />
-                        NFT Name
+                      <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                        <div className="flex items-center">
+                          <FileText className="w-4 h-4 mr-2" />
+                          NFT Name
+                        </div>
+                        <span className={`text-xs ${formData.name.length > 100 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {formData.name.length}/200
+                        </span>
                       </label>
                       <input
                         type="text"
@@ -352,6 +509,7 @@ const SuiNFTMinter: React.FC = () => {
                         value={formData.name}
                         onChange={handleInputChange}
                         placeholder="Enter NFT name"
+                        maxLength={200}
                         className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300"
                         required
                       />
@@ -359,9 +517,14 @@ const SuiNFTMinter: React.FC = () => {
 
                     {/* NFT Description */}
                     <div>
-                      <label className="flex items-center text-sm font-medium text-gray-300 mb-2">
-                        <Edit3 className="w-4 h-4 mr-2" />
-                        Description
+                      <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                        <div className="flex items-center">
+                          <Edit3 className="w-4 h-4 mr-2" />
+                          Description
+                        </div>
+                        <span className={`text-xs ${formData.description.length > 1000 ? 'text-red-400' : 'text-gray-500'}`}>
+                          {formData.description.length}/2000
+                        </span>
                       </label>
                       <textarea
                         name="description"
@@ -369,27 +532,143 @@ const SuiNFTMinter: React.FC = () => {
                         onChange={handleInputChange}
                         placeholder="Describe your NFT"
                         rows={4}
+                        maxLength={2000}
                         className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300 resize-none"
                         required
                       />
                     </div>
 
-                    {/* Image URL */}
+                    {/* Image Input Method Selection */}
                     <div>
-                      <label className="flex items-center text-sm font-medium text-gray-300 mb-2">
-                        <Image className="w-4 h-4 mr-2" />
-                        Image URL
+                      <label className="text-sm font-medium text-gray-300 mb-3 block">
+                        Choose Image Input Method
                       </label>
-                      <input
-                        type="url"
-                        name="image_url"
-                        value={formData.image_url}
-                        onChange={handleInputChange}
-                        placeholder="https://example.com/image.jpg"
-                        className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300"
-                        required
-                      />
+                      <div className="flex space-x-4 mb-4">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageInputMethod('file');
+                            resetImageInput();
+                          }}
+                          className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
+                            imageInputMethod === 'file'
+                              ? 'bg-cyan-500 text-white'
+                              : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                          }`}
+                        >
+                          <Upload className="w-4 h-4 mr-2" />
+                          Upload File
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setImageInputMethod('url');
+                            resetImageInput();
+                          }}
+                          className={`flex items-center px-4 py-2 rounded-lg transition-all duration-300 ${
+                            imageInputMethod === 'url'
+                              ? 'bg-cyan-500 text-white'
+                              : 'bg-white/10 text-gray-300 hover:bg-white/20'
+                          }`}
+                        >
+                          <Link className="w-4 h-4 mr-2" />
+                          Enter URL
+                        </button>
+                      </div>
                     </div>
+
+                    {/* File Upload */}
+                    {imageInputMethod === 'file' && (
+                      <div>
+                        <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                          <div className="flex items-center">
+                            <Upload className="w-4 h-4 mr-2" />
+                            Upload to Walrus
+                          </div>
+                        </label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleFileUpload(file);
+                          }}
+                          disabled={isUploading}
+                          className="w-full bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-cyan-500 file:text-white hover:file:bg-cyan-600 disabled:opacity-50"
+                        />
+                      </div>
+                    )}
+
+                    {/* URL Input */}
+                    {imageInputMethod === 'url' && (
+                      <div>
+                        <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                          <div className="flex items-center">
+                            <Image className="w-4 h-4 mr-2" />
+                            Image URL
+                          </div>
+                          <span className={`text-xs ${formData.image_url.length > 500 ? 'text-red-400' : 'text-gray-500'}`}>
+                            {formData.image_url.length}/1000
+                          </span>
+                        </label>
+                        <div className="flex space-x-2">
+                          <input
+                            type="url"
+                            name="image_url"
+                            value={formData.image_url}
+                            onChange={handleInputChange}
+                            placeholder="https://example.com/image.jpg"
+                            maxLength={1000}
+                            className="flex-1 bg-white/5 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-transparent transition-all duration-300"
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={handleUrlToWalrus}
+                            disabled={isUploading || !formData.image_url.trim()}
+                            className="flex items-center px-4 py-3 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-600 text-white rounded-xl transition-all duration-300 disabled:cursor-not-allowed"
+                          >
+                            <Cloud className="w-4 h-4 mr-2" />
+                            Store in Walrus
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          Optional: Store the image from URL in Walrus for decentralized hosting
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Upload Progress */}
+                    {(isUploading || uploadProgress) && (
+                      <div className="bg-white/5 border border-white/20 rounded-xl p-4">
+                        {isUploading ? (
+                          <div className="flex items-center text-cyan-400">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-cyan-400 mr-3"></div>
+                            {uploadProgress}
+                          </div>
+                        ) : (
+                          <div className="text-green-400">{uploadProgress}</div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Walrus Status */}
+                    {walrusBlob && (
+                      <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-4">
+                        <div className="flex items-center text-green-400 mb-2">
+                          <Cloud className="w-4 h-4 mr-2" />
+                          Stored in Walrus
+                        </div>
+                        <p className="text-sm text-gray-300">
+                          Blob ID: <code className="bg-black/20 px-1 rounded">{walrusBlob.blobId}</code>
+                        </p>
+                        {walrusBlob.originalUrl && (
+                          <p className="text-xs text-gray-400 mt-1">
+                            Original: {walrusBlob.originalUrl}
+                          </p>
+                        )}
+                      </div>
+                    )}
 
                     {/* Image Preview */}
                     {formData.image_url && (
@@ -412,7 +691,7 @@ const SuiNFTMinter: React.FC = () => {
                     <button
                       type="button"
                       onClick={handleMint}
-                      disabled={isMinting}
+                      disabled={isMinting || isUploading}
                       className="w-full bg-gradient-to-r from-cyan-500 to-purple-500 hover:from-cyan-600 hover:to-purple-600 disabled:from-gray-600 disabled:to-gray-600 text-white font-semibold py-4 px-6 rounded-xl transition-all duration-300 transform hover:scale-105 disabled:scale-100 disabled:cursor-not-allowed"
                     >
                       {isMinting ? (
@@ -495,6 +774,14 @@ const SuiNFTMinter: React.FC = () => {
                               <Trash2 className="w-4 h-4 text-red-400" />
                             </button>
                           </div>
+                          {/* Walrus indicator */}
+                          {nft.walrus_blob_id && (
+                            <div className="absolute top-4 left-4">
+                              <div className="bg-green-500/20 backdrop-blur-sm rounded-lg p-2">
+                                <Cloud className="w-4 h-4 text-green-400" />
+                              </div>
+                            </div>
+                          )}
                         </div>
                         
                         <div className="p-6">
@@ -536,6 +823,12 @@ const SuiNFTMinter: React.FC = () => {
                               <span className="font-medium">Minted:</span>
                               <span className="ml-2">{nft.timestamp.toLocaleDateString()}</span>
                             </div>
+                            {nft.walrus_blob_id && (
+                              <div className="flex items-center">
+                                <span className="font-medium">Walrus ID:</span>
+                                <span className="ml-2 font-mono text-xs truncate">{nft.walrus_blob_id}</span>
+                              </div>
+                            )}
                             <div className="flex items-center">
                               <span className="font-medium">ID:</span>
                               <span className="ml-2 font-mono text-xs truncate">{nft.id}</span>
