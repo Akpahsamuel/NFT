@@ -24,7 +24,7 @@ const SuiNFTMinter: React.FC = () => {
   const { mutate: signAndExecute } = useSignAndExecuteTransaction();
   
   // Contract configuration
-  const NFT_PACKAGE_ID = "0x435aaf7811d8e25962b1b3d822031c09ac5e3f5f2b1f99fd312dadd38cdd3cc7";
+  const NFT_PACKAGE_ID = "0xc6aa3596fec7b0778dbb42e5932277b09b7cfea25beb21bf9b56c715c53d7a1e";
   
   const [formData, setFormData] = useState({
     name: '',
